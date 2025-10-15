@@ -30,7 +30,11 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest ./frontend
           docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
 
-      # Step 5 – Deploy to EC2 Cloud
-      - name: Deploy to Cloud
+      # Step 5 – Deploy to EC2
+      - name: Deploy to EC2
         run: |
-          ssh -i intern-key.pem ec2-user@3.108.194.237 "cd /home/ec2-user/intern-proj && docker-compose pull && docker-compose up -d"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/intern-key.pem
+          chmod 600 ~/.ssh/intern-key.pem
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/intern-key.pem ec2-user@3.108.194.237 \
+            "cd /home/ec2-user/intern-proj && docker-compose pull && docker-compose up -d"
