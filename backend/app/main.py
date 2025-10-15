@@ -5,6 +5,11 @@ from fastapi import FastAPI
 from app import services
 from app.schema import UserIn, BaseResponse, UserListOut
 
+from prometheus_fastapi_instrumentator import Instrumentator
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app)
+
+
 app = FastAPI()
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
