@@ -1,0 +1,101 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION          = 'us-west-2'
+        ECR_REPO_BACKEND    = 'your-backend-ecr-repo'
+        ECR_REPO_FRONTEND   = 'your-frontend-ecr-repo'
+        CLUSTER_NAME        = 'your-eks-cluster-name'
+        AWS_CREDENTIALS     = credentials('aws-credentials')    // AWS Access Key & Secret Key
+        KUBE_CONFIG         = credentials('eks-kubeconfig')     // EKS kubeconfig
+    }
+
+    options {
+        timestamps()
+        ansiColor('xterm')
+        buildDiscarder(logRotator(daysToKeepStr: '30'))
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                echo "🔄 Checking out code from GitHub..."
+                git branch: 'main', url: 'https://github.com/yourusername/yourrepo.git'
+            }
+        }
+
+        stage('Build Backend Docker Image') {
+            steps {
+                script {
+                    echo "🐳 Building backend Docker image..."
+                    sh """
+                        cd backend
+                        docker build -t ${ECR_REPO_BACKEND}:latest .
+                    """
+                }
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                script {
+                    echo "🐳 Building frontend Docker image..."
+                    sh """
+                        cd frontend
+                        docker build -t ${ECR_REPO_FRONTEND}:latest .
+                    """
+                }
+            }
+        }
+
+        stage('Authenticate to AWS ECR') {
+            steps {
+                script {
+                    echo "🔑 Logging in to Amazon ECR..."
+                    sh '''
+                        aws configure set aws_access_key_id ${AWS_CREDENTIALS_USR}
+                        aws configure set aws_secret_access_key ${AWS_CREDENTIALS_PSW}
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_BACKEND%/*}
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Images to ECR') {
+            steps {
+                script {
+                    echo "📤 Pushing Docker images to ECR..."
+                    sh """
+                        docker push ${ECR_REPO_BACKEND}:latest
+                        docker push ${ECR_REPO_FRONTEND}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Amazon EKS') {
+            steps {
+                script {
+                    echo "🚀 Deploying application to EKS cluster..."
+                    sh """
+                        mkdir -p ~/.kube
+                        echo "${KUBE_CONFIG}" > ~/.kube/config
+                        kubectl config use-context ${CLUSTER_NAME}
+                        kubectl apply -f k8s-deployment.yaml
+                        kubectl apply -f k8s-service.yaml
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for details."
+        }
+    }
+}
