@@ -1,0 +1,36 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 – Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2 – Setup Docker Buildx
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      # Step 3 – Build and Push Backend Image
+      - name: Build and Push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest ./backend
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
+
+      # Step 4 – Build and Push Frontend Image
+      - name: Build and Push Frontend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest ./frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
+
+      # Step 5 – Deploy to EC2 Cloud
+      - name: Deploy to Cloud
+        run: |
+          ssh -i intern-key.pem ec2-user@3.108.194.237 "cd /home/ec2-user/intern-proj && docker-compose pull && docker-compose up -d"
